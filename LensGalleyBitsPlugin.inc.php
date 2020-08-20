@@ -206,18 +206,25 @@ class LensGalleyBitsPlugin extends GenericPlugin {
 		);
 
 
+                $referredArticle = $referredPublication = null;
+                $submissionDao = DAORegistry::getDAO('SubmissionDAO');
+                $publicationService = Services::get('publication');
+                foreach ($embeddableFiles as $embeddableFile) {
+                        // Ensure that the $referredArticle object refers to the article we want
+                        if (!$referredArticle || !$referredPublication || $referredPublication->getData('submissionId') != $referredArticle->getId() || $referredPublication->getId() != $galley->getData('publicationId')) {
+                                $referredPublication = $publicationService->get($galley->getData('publicationId'));
+                                $referredArticle = $submissionDao->getById($referredPublication->getData('submissionId'));
+                        }
+                        $fileUrl = $request->url(null, 'article', 'download', array($referredArticle->getBestArticleId(), $galley->getBestGalleyId(), $embeddableFile->getFileId()));
+                        $pattern = preg_quote($embeddableFile->getOriginalFileName());
 
-		foreach ($embeddableFiles as $embeddableFile) {
+                        $contents = preg_replace(
+                                $pattern='/([Ss][Rr][Cc]|[Hh][Rr][Ee][Ff]|[Dd][Aa][Tt][Aa])\s*=\s*"([^"]*' . $pattern . ')"/',
+                                '\1="' . $fileUrl . '"',
+                                $contents
+                        );
+                }
 
-			$fileUrl = $request->url(null, 'article', 'download', array($galley->getSubmissionId(), $galley->getId(), $embeddableFile->getFileId()));
-			$pattern = preg_quote($embeddableFile->getOriginalFileName());
-
-			$contents = preg_replace(
-				$pattern='/([Ss][Rr][Cc]|[Hh][Rr][Ee][Ff]|[Dd][Aa][Tt][Aa])\s*=\s*"([^"]*' . $pattern . ')"/',
-				'\1="' . $fileUrl . '"',
-				$contents
-			);
-		}
 
 		// Perform replacement for ojs://... URLs
 		$contents = preg_replace_callback(
@@ -229,7 +236,7 @@ class LensGalleyBitsPlugin extends GenericPlugin {
 		// Perform variable replacement for journal, issue, site info
 		$issueDao = DAORegistry::getDAO('IssueDAO');
 		$context = Application::getRequest()->getContext();
-		$issue = $issueDao->getByArticleId($galley->getData('submissionId'), $context->getId());
+                $issue = $issueDao->getBySubmissionId($galley->getData('submissionId'));
 
 		$journal = $request->getJournal();
 		$site = $request->getSite();
